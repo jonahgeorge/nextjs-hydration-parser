@@ -1,232 +1,221 @@
+> [!CAUTION]
+> This is an LLM-ported version of [`kennyaires/nextjs-hydration-parser`](https://github.com/kennyaires/nextjs-hydration-parser) to Ruby. While the test suite passes and functionality is maintained, this port should be considered experimental.
+
 # Next.js Hydration Parser
 
-[![PyPI version](https://badge.fury.io/py/nextjs-hydration-parser.svg)](https://badge.fury.io/py/nextjs-hydration-parser)
-[![Python versions](https://img.shields.io/pypi/pyversions/nextjs-hydration-parser.svg)](https://pypi.org/project/nextjs-hydration-parser/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+A specialized Ruby library for extracting and parsing Next.js 13+ hydration data from raw HTML pages. When scraping Next.js applications, the server-side rendered HTML contains complex hydration data chunks embedded in `self.__next_f.push()` calls that need to be properly assembled and parsed to access the underlying application data.
 
-A specialized Python library for extracting and parsing Next.js 13+ hydration data from raw HTML pages. When scraping Next.js applications, the server-side rendered HTML contains complex hydration data chunks embedded in `self.__next_f.push()` calls that need to be properly assembled and parsed to access the underlying application data.
-
-## The Problem
+## Problem Statement
 
 Next.js 13+ applications with App Router use a sophisticated hydration system that splits data across multiple script chunks in the raw HTML. When you scrape these pages (before JavaScript execution), you get fragments like:
 
 ```html
-<script>self.__next_f.push([1,"partial data chunk 1"])</script>
-<script>self.__next_f.push([1,"continuation of data"])</script>
-<script>self.__next_f.push([2,"{\"products\":[{\"id\":1,\"name\":\"Product\"}]}"])</script>
+<script>
+  self.__next_f.push([1, "partial data chunk 1"]);
+</script>
+<script>
+  self.__next_f.push([1, "continuation of data"]);
+</script>
+<script>
+  self.__next_f.push([2, '{"products":[{"id":1,"name":"Product"}]}']);
+</script>
 ```
 
 This data is:
+
 - **Split across multiple chunks** that need to be reassembled
 - **Encoded in various formats** (JSON strings, base64, escaped content)
 - **Mixed with rendering metadata** that needs to be filtered out
 - **Difficult to parse** due to complex escaping and nested structures
 
-This library solves these challenges by intelligently combining chunks, handling multiple encoding formats, and extracting the meaningful application data.
-
-## Features
-
-- �️ **Web Scraping Focused** - Designed specifically for parsing raw Next.js 13+ pages before JavaScript execution
-- 🧩 **Chunk Reassembly** - Intelligently combines data fragments split across multiple `self.__next_f.push()` calls
-- 🔍 **Multi-format Parsing** - Handles JSON strings, base64-encoded data, escaped content, and complex nested structures
-- 🎯 **Data Extraction** - Filters out rendering metadata to extract meaningful application data (products, users, API responses, etc.)
-- 🛠️ **Robust Error Handling** - Continues processing even with malformed chunks, providing debugging information
-- 🔎 **Pattern Matching** - Search and filter extracted data by keys or content patterns
-- ⚡ **Performance Optimized** - Efficiently processes large HTML files with hundreds of hydration chunks
-
-## Use Cases
-
-Perfect for:
-- **E-commerce scraping** - Extract product catalogs, prices, and inventory data
-- **Content aggregation** - Collect articles, blog posts, and structured content
-- **API reverse engineering** - Understand data structures used by Next.js applications
-- **SEO analysis** - Extract meta information and structured data for analysis
-
 ## Installation
 
-```bash
-pip install nextjs-hydration-parser
+Add this line to your application's Gemfile:
+
+```ruby
+gem 'chompjs', git: 'https://github.com/jonahgeorge/chompjs.git'
+gem 'nextjs-hydration-parser', git: 'https://github.com/jonahgeorge/nextjs-hydration-parser.git'
 ```
-
-### Requirements
-
-- Python 3.7+
-- `chompjs` for JavaScript object parsing
-- `requests` (for scraping examples)
-
-The library is lightweight with minimal dependencies, designed for integration into existing scraping pipelines.
 
 ## Quick Start
 
-```python
-from nextjs_hydration_parser import NextJSHydrationDataExtractor
-import requests
+```ruby
+require 'nextjs_hydration_parser'
+require 'http'
 
 # Create an extractor instance
-extractor = NextJSHydrationDataExtractor()
+extractor = NextjsHydrationParser::Extractor.new
 
 # Scrape a Next.js page (before JavaScript execution)
-response = requests.get('https://example-nextjs-ecommerce.com/products')
-html_content = response.text
+response = HTTP.get('https://example-nextjs-ecommerce.com/products')
+html_content = response.to_s
 
 # Extract and parse the hydration data
 chunks = extractor.parse(html_content)
 
 # Process the results to find meaningful data
-for chunk in chunks:
-    print(f"Chunk ID: {chunk['chunk_id']}")
-    for item in chunk['extracted_data']:
-        if item['type'] == 'colon_separated':
-            # Often contains API response data
-            print(f"API Data: {item['data']}")
-        elif 'products' in str(item['data']):
-            # Found product data
-            print(f"Products: {item['data']}")
+chunks.each do |chunk|
+  puts "Chunk ID: #{chunk[:chunk_id]}"
+  chunk[:extracted_data].each do |item|
+    if item[:type] == 'colon_separated'
+      # Often contains API response data
+      puts "API Data: #{item[:data]}"
+    elsif item[:data].to_s.include?('products')
+      # Found product data
+      puts "Products: #{item[:data]}"
+    end
+  end
+end
 ```
 
 ### Real-world Example: E-commerce Scraping
 
-```python
+```ruby
 # Extract product data from a Next.js e-commerce site
-extractor = NextJSHydrationDataExtractor()
-html_content = open('product_page.html', 'r').read()
+extractor = NextjsHydrationParser::Extractor.new
+html_content = File.read('product_page.html')
 
 chunks = extractor.parse(html_content)
 
 # Find product information
 products = extractor.find_data_by_pattern(chunks, 'product')
-for product_data in products:
-    if isinstance(product_data['value'], dict):
-        product = product_data['value']
-        print(f"Product: {product.get('name', 'Unknown')}")
-        print(f"Price: ${product.get('price', 'N/A')}")
-        print(f"Stock: {product.get('inventory', 'Unknown')}")
+products.each do |product_data|
+  if product_data[:value].is_a?(Hash)
+    product = product_data[:value]
+    puts "Product: #{product['name'] || 'Unknown'}"
+    puts "Price: $#{product['price'] || 'N/A'}"
+    puts "Stock: #{product['inventory'] || 'Unknown'}"
+  end
+end
 ```
 
 ## Advanced Usage
 
 ### Scraping Complex Next.js Applications
 
-```python
-import requests
-from nextjs_hydration_parser import NextJSHydrationDataExtractor
+```ruby
+require 'http'
+require 'nextjs_hydration_parser'
 
-def scrape_nextjs_data(url):
-    """Scrape and extract data from a Next.js application"""
-    
-    # Get raw HTML (before JavaScript execution)
-    headers = {'User-Agent': 'Mozilla/5.0 (compatible; DataExtractor/1.0)'}
-    response = requests.get(url, headers=headers)
-    
-    # Parse hydration data
-    extractor = NextJSHydrationDataExtractor()
-    chunks = extractor.parse(response.text)
-    
-    # Extract meaningful data
-    extracted_data = {}
-    
-    for chunk in chunks:
-        if chunk['chunk_id'] == 'error':
-            continue  # Skip malformed chunks
-            
-        for item in chunk['extracted_data']:
-            data = item['data']
-            
-            # Look for common data patterns
-            if isinstance(data, dict):
-                # API responses often contain these keys
-                for key in ['products', 'users', 'posts', 'data', 'results']:
-                    if key in data:
-                        extracted_data[key] = data[key]
-                        
-    return extracted_data
+def scrape_nextjs_data(url)
+  # Get raw HTML (before JavaScript execution)
+  headers = { 'User-Agent' => 'Mozilla/5.0 (compatible; DataExtractor/1.0)' }
+  response = HTTP.headers(headers).get(url)
+
+  # Parse hydration data
+  extractor = NextjsHydrationParser::Extractor.new
+  chunks = extractor.parse(response.to_s)
+
+  # Extract meaningful data
+  extracted_data = {}
+
+  chunks.each do |chunk|
+    next if chunk[:chunk_id] == 'error'  # Skip malformed chunks
+
+    chunk[:extracted_data].each do |item|
+      data = item[:data]
+
+      # Look for common data patterns
+      if data.is_a?(Hash)
+        # API responses often contain these keys
+        ['products', 'users', 'posts', 'data', 'results'].each do |key|
+          if data.key?(key)
+            extracted_data[key] = data[key]
+          end
+        end
+      end
+    end
+  end
+
+  extracted_data
+end
 
 # Usage
 data = scrape_nextjs_data('https://nextjs-shop.example.com')
-print(f"Found {len(data.get('products', []))} products")
+puts "Found #{data['products']&.length || 0} products"
 ```
 
 ### Handling Large HTML Files
 
 When scraping large Next.js applications, you might encounter hundreds of hydration chunks:
 
-```python
+```ruby
 # Read from file
-with open('large_nextjs_page.html', 'r', encoding='utf-8') as f:
-    html_content = f.read()
+html_content = File.read('large_nextjs_page.html', encoding: 'utf-8')
 
 # Parse and extract
-extractor = NextJSHydrationDataExtractor()
+extractor = NextjsHydrationParser::Extractor.new
 chunks = extractor.parse(html_content)
 
-print(f"Found {len(chunks)} hydration chunks")
+puts "Found #{chunks.length} hydration chunks"
 
 # Get overview of all available data keys
 all_keys = extractor.get_all_keys(chunks)
-print("Most common data keys:")
-for key, count in list(all_keys.items())[:20]:
-    print(f"  {key}: {count} occurrences")
+puts "Most common data keys:"
+all_keys.first(20).each do |key, count|
+  puts "  #{key}: #{count} occurrences"
+end
 
 # Focus on specific data types
 api_data = []
-for chunk in chunks:
-    for item in chunk['extracted_data']:
-        if item['type'] == 'colon_separated' and 'api' in item.get('identifier', '').lower():
-            api_data.append(item['data'])
+chunks.each do |chunk|
+  chunk[:extracted_data].each do |item|
+    if item[:type] == 'colon_separated' && item[:identifier]&.downcase&.include?('api')
+      api_data << item[:data]
+    end
+  end
+end
 
-print(f"Found {len(api_data)} API data chunks")
+puts "Found #{api_data.length} API data chunks"
 ```
 
 ## API Reference
 
-### `NextJSHydrationDataExtractor`
+### `NextjsHydrationParser::Extractor`
 
 The main class for extracting Next.js hydration data.
 
 #### Methods
 
-- **`parse(html_content: str) -> List[Dict[str, Any]]`**
-  
+- **`parse(html_content) -> Array<Hash>`**
+
   Parse Next.js hydration data from HTML content.
-  
   - `html_content`: Raw HTML string containing script tags
-  - Returns: List of parsed data chunks
+  - Returns: Array of parsed data chunks
 
-- **`get_all_keys(parsed_chunks: List[Dict], max_depth: int = 3) -> Dict[str, int]`**
-  
+- **`get_all_keys(parsed_chunks, max_depth: 3) -> Hash`**
+
   Extract all unique keys from parsed chunks.
-  
   - `parsed_chunks`: Output from `parse()` method
-  - `max_depth`: Maximum depth to traverse
-  - Returns: Dictionary of keys and their occurrence counts
+  - `max_depth`: Maximum depth to traverse (default: 3)
+  - Returns: Hash of keys and their occurrence counts
 
-- **`find_data_by_pattern(parsed_chunks: List[Dict], pattern: str) -> List[Any]`**
-  
+- **`find_data_by_pattern(parsed_chunks, pattern) -> Array`**
+
   Find data matching a specific pattern.
-  
-  - `parsed_chunks`: Output from `parse()` method  
+  - `parsed_chunks`: Output from `parse()` method
   - `pattern`: Key pattern to search for
-  - Returns: List of matching data items
+  - Returns: Array of matching data items
 
 ## Data Structure
 
 The parser returns data in the following structure:
 
-```python
+```ruby
 [
-    {
-        "chunk_id": "1",  # ID from self.__next_f.push([ID, data])
-        "extracted_data": [
-            {
-                "type": "colon_separated|standalone_json|whole_text",
-                "data": {...},  # Parsed JavaScript/JSON object
-                "identifier": "...",  # For colon_separated type
-                "start_position": 123  # For standalone_json type
-            }
-        ],
-        "chunk_count": 1,  # Number of chunks with this ID
-        "_positions": [123]  # Original positions in HTML
-    }
+  {
+    chunk_id: "1",  # ID from self.__next_f.push([ID, data])
+    extracted_data: [
+      {
+        type: "colon_separated|standalone_json|whole_text",
+        data: {...},  # Parsed JavaScript/JSON object
+        identifier: "...",  # For colon_separated type
+        start_position: 123  # For standalone_json type
+      }
+    ],
+    chunk_count: 1,  # Number of chunks with this ID
+    _positions: [123]  # Original positions in HTML
+  }
 ]
 ```
 
@@ -235,34 +224,46 @@ The parser returns data in the following structure:
 The parser handles various data formats commonly found in Next.js 13+ hydration chunks:
 
 ### 1. JSON Strings
+
 ```javascript
-self.__next_f.push([1, "{\"products\":[{\"id\":1,\"name\":\"Laptop\",\"price\":999}]}"])
+self.__next_f.push([1, '{"products":[{"id":1,"name":"Laptop","price":999}]}']);
 ```
 
-### 2. Base64 + JSON Combinations  
+### 2. Base64 + JSON Combinations
+
 ```javascript
-self.__next_f.push([2, "eyJhcGlLZXkiOiJ4eXoifQ==:{\"data\":{\"users\":[{\"id\":1}]}}"])
+self.__next_f.push([
+  2,
+  'eyJhcGlLZXkiOiJ4eXoifQ==:{"data":{"users":[{"id":1}]}}',
+]);
 ```
 
 ### 3. JavaScript Objects
+
 ```javascript
-self.__next_f.push([3, "{key: 'value', items: [1, 2, 3], nested: {deep: true}}"])
+self.__next_f.push([
+  3,
+  "{key: 'value', items: [1, 2, 3], nested: {deep: true}}",
+]);
 ```
 
 ### 4. Escaped Content
-```javascript  
-self.__next_f.push([4, "\"escaped content with \\\"quotes\\\" and newlines\\n\""])
+
+```javascript
+self.__next_f.push([4, '"escaped content with \\"quotes\\" and newlines\\n"']);
 ```
 
 ### 5. Multi-chunk Data
+
 ```javascript
 // Data split across multiple chunks with same ID
-self.__next_f.push([5, "first part of data"])
-self.__next_f.push([5, " continued here"])
-self.__next_f.push([5, " and final part"])
+self.__next_f.push([5, "first part of data"]);
+self.__next_f.push([5, " continued here"]);
+self.__next_f.push([5, " and final part"]);
 ```
 
 ### 6. Complex Nested Structures
+
 Next.js often embeds API responses, page props, and component data in deeply nested formats that the parser can extract and flatten for easy access.
 
 ## How Next.js 13+ Hydration Works
@@ -276,7 +277,8 @@ Understanding the hydration process helps explain why this library is necessary:
 
 When scraping, you're intercepting step 2 - getting the raw HTML with embedded data before the JavaScript processes it. This gives you access to all the data the application uses, but in a fragmented format that needs intelligent parsing.
 
-**Why not just use the rendered page?** 
+**Why not just use the rendered page?**
+
 - Faster scraping (no JavaScript execution wait time)
 - Access to internal data structures not visible in the DOM
 - Bypasses client-side anti-scraping measures
@@ -289,59 +291,3 @@ The parser includes robust error handling:
 - **Malformed data**: Continues processing and marks chunks with errors
 - **Multiple parsing strategies**: Falls back to alternative parsing methods
 - **Partial data**: Handles incomplete or truncated data gracefully
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## Development Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/kennyaires/nextjs-hydration-parser.git
-cd nextjs-hydration-parser
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode with testing dependencies
-pip install -e .[dev]
-
-# Run tests
-pytest tests/ -v
-
-# Run formatting
-black nextjs_hydration_parser/ tests/
-
-# Test with real Next.js sites
-python examples/scrape_example.py
-```
-
-### Testing with Real Sites
-
-The library includes examples for testing with popular Next.js sites:
-
-```bash
-# Test with different types of Next.js applications
-python examples/test_ecommerce.py
-python examples/test_blog.py  
-python examples/test_social.py
-```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Legal Disclaimer
-
-This project is not affiliated with or endorsed by Vercel, Next.js, or any related entity.  
-All trademarks and brand names are the property of their respective owners.
-
-This library is intended for ethical use only. Users are solely responsible for ensuring that their use of this software complies with applicable laws, website terms of service, and data usage policies. The authors disclaim any liability for misuse or violations resulting from the use of this tool.
